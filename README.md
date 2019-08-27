@@ -21,10 +21,10 @@ Assignment X        // Name this dir whatever you want
 │       │   student1Info.txt
 |       |   ...
 |   
-└───ReadyToGrade    // Program searches thru 'StudentFiles' 
-│   student1dir    // sorts them in here
-│   student2dir
-|   ...
+|   └───ReadyToGrade    // Program searches thru 'StudentFiles' 
+│       │   student1dir    // sorts them in here
+│       │   student2dir
+│       │   ...
 ```
 #### How To Run
 ___
