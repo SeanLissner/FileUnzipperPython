@@ -33,6 +33,9 @@ SCRIPT_VERSION = "v1.0"
 # Add any file extensions you want the program to extract from the student's zip file
 ACCEPTED_FORMATS = [".py", ".txt", ".csv", ".dat"]
 
+# Names of folders that we want the script to ignore (hidden folders, config info, etc.)
+IGNORE_FOLDERS = ["venv", "bin", ".idea", "lib", "include"]
+
 # "A" is for assignment config and "L" is for lab config
 #   - Assignment configuration creates sub directories for each student to to make file organisation easier
 #   - Lab configuration just puts all of the .py files into ReadyToGrade
@@ -147,7 +150,8 @@ def recursiveFileMover(path, readyToGradePath, moveErrors):
                 moveErrors.append("Error moving file: \n\t" + path + file
                                   + "\nTo location: \n\t" + readyToGradePath + "\n\n")
 
-        elif os.path.isdir(path+"/"+file):                      # found more directories -> recurse!
+        elif os.path.isdir(path+"/"+file) and file not in IGNORE_FOLDERS:
+            print(file)
             recursiveFileMover(path+"/"+file, readyToGradePath, moveErrors)
 
 
