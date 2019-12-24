@@ -151,7 +151,6 @@ def recursiveFileMover(path, readyToGradePath, moveErrors):
                                   + "\nTo location: \n\t" + readyToGradePath + "\n\n")
 
         elif os.path.isdir(path+"/"+file) and file not in IGNORE_FOLDERS:
-            print(file)
             recursiveFileMover(path+"/"+file, readyToGradePath, moveErrors)
 
 
