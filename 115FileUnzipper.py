@@ -85,7 +85,7 @@ def main():
         print("Could not find any .zip files in the working directory. Exiting.")
         return
 
-    if not mkdir(dirs_to_create):     # Creates the dirs we will be reading into, returns false if failure
+    if not mkdir(dirs_to_create):     # Creates the dirs we will be reading into, returns false if function fails
         print("Preexisting directories found, please clear cwd. Exiting.")
         return
 
@@ -94,7 +94,7 @@ def main():
     leftoverStudentFilesDir = dirs_to_create[2]        # dir/AllLeftoverFiles/StudentFiles
     leftoverStudentZipsDir = dirs_to_create[3]         # dir/AllLeftoverFiles/StudentZips
 
-    # Unzipping main file from blackboard
+    # Unzipping main zip file from blackboard
     for file in source:
         if file.endswith(".zip"):
             zip_ref = zipfile.ZipFile(file, 'r')
@@ -178,6 +178,7 @@ def recursiveFileMover(path, readyToGradePath, moveErrors):
                 moveErrors.append(error)
                 print(error)
 
+        # Recurse!!!
         elif os.path.isdir(path+"/"+file) and file not in IGNORE_FOLDERS:
             recursiveFileMover(path+"/"+file, readyToGradePath, moveErrors)
 
