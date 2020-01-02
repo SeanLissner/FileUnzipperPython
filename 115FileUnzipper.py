@@ -6,7 +6,7 @@ import socket
 import platform
 import time
 
-SCRIPT_VERSION = "v1.1"
+SCRIPT_VERSION = "v1.2"
 
 #################################################################################################
 #                                                                                               #
@@ -19,19 +19,17 @@ SCRIPT_VERSION = "v1.1"
 #   3. Set the configuration details by setting ACCEPTED_FORMATS and DELIVERABLE_TYPE vars      #
 #   4. Run the script                                                                           #
 #   5. All the .py files should now be under "ReadyToGrade" in each student's corresponding     #
-#      personal folder (Assignment configuration).                                              #
+#      personal folder (Assignment configuration)                                               #
 #                                                                                               #
 #   NOTES:                                                                                      #
 #       - The program checks to see if the zip is corrupted or if it doesn't want to open       #
 #         it prints all the corrupted files in the command line before it terminates            #
+#       - An ERROR refers to something that would have otherwise crashed the program had it     #
+#         not been caught and handled                                                           #
+#       - A WARNING refers to just a bad student submission, you'll probably have to go into    #
+#         the 'ReadyToGrade" folder and fix the problem manually                                #
 #                                                                                               #
 #################################################################################################
-
-# TODO:
-#   Nested zip files
-#   Not a zipped submission (this might be hard)
-#   Print something to console if a we created a folder which is empty
-#   General cleanup
 
 
 # -------------- MODIFY THE FOLLOWING AS NECESSARY -------------- #
@@ -39,12 +37,12 @@ SCRIPT_VERSION = "v1.1"
 # Add any file extensions you want the program to extract from the student's zip file
 ACCEPTED_FORMATS = [".py", ".txt", ".csv", ".dat"]
 
-# Names of folders that we want the script to ignore (hidden folders, config info, etc.)
+# Names of folders that we want the script to ignore (hidden folders, interpreter config info, etc.)
 IGNORE_FOLDERS = ["venv", "bin", ".idea", "lib", "include"]
 
 # "A" is for assignment config and "L" is for lab config
 #   - Assignment configuration creates sub directories for each student to to make file organisation easier
-#   - Lab configuration just puts all of the .py files into ReadyToGrade
+#   - Lab configuration just puts all of the .py files into 'ReadyToGrade'
 DELIVERABLE_TYPE = "A"
 
 # --------------------------------------------------------------- #
@@ -56,20 +54,21 @@ def main():
     t0 = time.perf_counter()
     studentCount = 0
 
-    if not isValidConfig():       # Checks that configs are correct
+    if not isValidConfig():       # Checks that configs are valid
         return
 
     corruptedFiles = []              # Stores the names of any corrupted files
     successfulFiles = []             # Stores the names of the successfully unzipped files
     moveErrors = []                  # Stores any caught file moving errors
+    submissionWarnings = []          # Handles a variety of issues with badly formatted submissions
 
     cwd = os.getcwd()                # Gets the file path to current working dir
 
     # List of directories that need to be created relative to cwd
-    newDirs = [cwd + "/ReadyToGrade/",
-               cwd + "/AllLeftoverFiles/",
-               cwd + "/AllLeftoverFiles/" + "StudentFiles/",
-               cwd + "/AllLeftoverFiles/" + "StudentZips/"]
+    dirs_to_create = [cwd + "/ReadyToGrade/",
+                      cwd + "/AllLeftoverFiles/",
+                      cwd + "/AllLeftoverFiles/" + "StudentFiles/",
+                      cwd + "/AllLeftoverFiles/" + "StudentZips/"]
 
     # List of files in current dir
     source = os.listdir(cwd)
@@ -86,16 +85,17 @@ def main():
         print("Could not find any .zip files in the working directory. Exiting.")
         return
 
-    if mkdir(newDirs) == False:     # Creates the dirs we will be reading into
-        print("Prexisting directories found, please clear cwd. Exiting.")
+    if not mkdir(dirs_to_create):     # Creates the dirs we will be reading into, returns false if failure
+        print("Preexisting directories found, please clear cwd. Exiting.")
         return
 
-    readyToGradeDir = newDirs[0]                # dir/ReadyToGrade/
-    allLeftoverFilesDir = newDirs[1]            # dir/AllLeftoverFiles/     (currently unused var)
-    leftoverStudentFilesDir = newDirs[2]        # dir/AllLeftoverFiles/StudentFiles
-    leftoverStudentZipsDir = newDirs[3]         # dir/AllLeftoverFiles/StudentZips
+    readyToGradeDir = dirs_to_create[0]                # dir/ReadyToGrade/
+    allLeftoverFilesDir = dirs_to_create[1]            # dir/AllLeftoverFiles/     (currently unused var)
+    leftoverStudentFilesDir = dirs_to_create[2]        # dir/AllLeftoverFiles/StudentFiles
+    leftoverStudentZipsDir = dirs_to_create[3]         # dir/AllLeftoverFiles/StudentZips
 
-    for file in source:               # Unzipping main file from blackboard
+    # Unzipping main file from blackboard
+    for file in source:
         if file.endswith(".zip"):
             zip_ref = zipfile.ZipFile(file, 'r')
             zip_ref.extractall(leftoverStudentZipsDir)
@@ -104,7 +104,16 @@ def main():
     # List of zip files + txt files from unzipping master
     unzippedSource = os.listdir(leftoverStudentZipsDir)
 
-    for file in unzippedSource:     # Unzipping all the individual student zip files
+    # Checking to make sure every student has submitted a zip file
+    # Entering the if statement means a directory will not be generated, should be handled manually by grader
+    for file in unzippedSource:
+        if not file.endswith((".zip", ".txt")):
+            warning = "WARNING: Non-zip submission found: " + file
+            submissionWarnings.append(warning)
+            print(warning)
+
+    # Unzipping all the individual student zip files
+    for file in unzippedSource:
         if file.endswith(".zip"):
             try:
                 studentCount += 1
@@ -118,7 +127,7 @@ def main():
                 if DELIVERABLE_TYPE.upper() == "A":     # File destination depends on configuration
 
                     userName = getUsername(file)        # Get username from filename
-                    fileDest = readyToGradeDir+userName
+                    fileDest = readyToGradeDir + userName
 
                     if not os.path.exists(fileDest):    # Creating personal dir to unzip file into
                         os.makedirs(fileDest)
@@ -131,18 +140,29 @@ def main():
 
             except zipfile.BadZipFile:
                 # Saves name of file for printing to logfile
+                print("ERROR: Found corrupted .zip file: " + file)
                 corruptedFiles.append(file)
+
+    # Loops through all of the user directories we generated at the start of the program
+    # if there are empty folders then something went wrong moving our files
+    for studentDirectory in os.listdir(readyToGradeDir):
+        if not os.listdir(readyToGradeDir + studentDirectory):
+            warning = "WARNING: Empty student directory '" + studentDirectory + "'\n"
+            warning += "Likely an incorrect submission, preventing the program from moving the file correctly.\n"
+            warning += "Look through the 'StudentFiles' directory for files associated with given username\n"
+            submissionWarnings.append(warning)
+            print(warning)
 
     t1 = time.perf_counter()
     info["time"] = str(round(t1-t0, 4))
     info["count"] = studentCount
 
-    generateLogFile(corruptedFiles, successfulFiles, moveErrors, info)    # Writes all data to logfile
+    generateLogFile(corruptedFiles, successfulFiles, moveErrors, submissionWarnings, info)    # Writes all data to logfile
 
 
-# Inputs:   Path             - The current directory where this function is looking for py files
+# Inputs:   path             - The current directory where this function is looking for py files
 #           readytoGradePath - Path to the folder where all the .py files need to be moved to
-#           moveErrors       -
+#           moveErrors       - Any issues moving files are saved here for logfile printing
 # Notes:    This function is called recursively in case there is a folder hierarchy hiding the
 #           student's submission.
 def recursiveFileMover(path, readyToGradePath, moveErrors):
@@ -154,17 +174,21 @@ def recursiveFileMover(path, readyToGradePath, moveErrors):
             try:
                 shutil.move(path+"/"+file, readyToGradePath)        # move it to the correct directory
             except shutil.Error:
-                moveErrors.append("Error moving file: \n\t" + path + file
-                                  + "\nTo location: \n\t" + readyToGradePath + "\n\n")
+                error = "ERROR: moving file: \n\t" + path + file + "\nTo location: \n\t" + readyToGradePath + "\n\n"
+                moveErrors.append(error)
+                print(error)
 
         elif os.path.isdir(path+"/"+file) and file not in IGNORE_FOLDERS:
             recursiveFileMover(path+"/"+file, readyToGradePath, moveErrors)
 
 
-# Inputs:   corruptedFiles  - List containing the zip files that were corrupted
-#           successfulFiles - List containing the zip files that were unzipped successful
+# Inputs:   corruptedFiles   - List containing the zip files that were corrupted
+#           successfulFiles  - List containing the zip files that were unzipped successful
+#           moveErrors       - List containing all of the attempted moves that threw an error
+#           submissionIssues - List containing any issues due to badly formatted student submissions,
+#                              could be a variety of different issues, handle manually
 # Notes:    Generates a log file with info about when the script was run, system, corrupted/non-corrupted zips
-def generateLogFile(corruptedFiles, successfulFiles, moveErrors, info):
+def generateLogFile(corruptedFiles, successfulFiles, moveErrors, submissionWarnings, info):
 
     currentDT = datetime.datetime.now()  # Gets current time
 
@@ -182,6 +206,16 @@ def generateLogFile(corruptedFiles, successfulFiles, moveErrors, info):
     outfile.write("\n\nRUNTIME INFORMATION:")
     outfile.write("\nScript execution time:\t" + info["time"])
     outfile.write("\nTotal students:\t\t\t" + str(info["count"]))
+
+    # If submissionWarnings NOT empty, prints all warnings generated
+    if submissionWarnings:
+        outfile.write("\n\n        **************************************************\n\n")
+        outfile.write("Found a total of " + str(len(submissionWarnings)) + " submission warning(s):  \n\n")
+        for warning in submissionWarnings:
+            outfile.write("\t" + warning + "\n")
+    else:
+        outfile.write("\n\n        **************************************************\n\n")
+        outfile.write("No submission issues\n")
 
     # If corruptedFiles NOT empty, prints all corrupted files
     if corruptedFiles:
@@ -202,7 +236,7 @@ def generateLogFile(corruptedFiles, successfulFiles, moveErrors, info):
             outfile.write(move)
     else:
         outfile.write("\n\n        **************************************************\n\n")
-        outfile.write("All files moved successfully \n")
+        outfile.write("All unzipped files moved successfully \n")
 
     # Printing all successfully unzipped files
     outfile.write("\n\n        **************************************************\n\n")
@@ -217,9 +251,11 @@ def getUsername(fileName) -> str:
     parts = fileName.split("_")
     return parts[1]
 
+
 # Given a file, returns a string of the file extension to be compared to our ACCEPTED_FORMATS list
 def getFileExtenion(file) -> str:
     return os.path.splitext(file)[1].lower()
+
 
 # Input: newDirs is a list containing the names of all the subdirectories to be created
 # mkdir generates all the necessary subdirectories the script will use
@@ -229,8 +265,8 @@ def mkdir(newDirs) -> bool:
         if not os.path.exists(directory):
             os.makedirs(directory)
         else:
-            print("\n" + directory
-                  + "\n Directory already exists. Move script and .zip to clean directory and try again")
+            print("Following directory already exists:\n\t" + directory
+                  + "\nMove script and .zip to clean directory and try again")
             return False
     return True
 
@@ -239,14 +275,15 @@ def mkdir(newDirs) -> bool:
 def isValidConfig() -> bool:
 
     # Checking deliverable type
-    if (DELIVERABLE_TYPE.upper() != "A" and DELIVERABLE_TYPE.upper() != "L"):
+    if DELIVERABLE_TYPE.upper() != "A" and DELIVERABLE_TYPE.upper() != "L":
         return False
 
     # Checking accepted formats
     for ext in ACCEPTED_FORMATS:
-        if not (ext.startswith(".")):
+        if not ext.startswith("."):
             return False
 
     return True
+
 
 main()
